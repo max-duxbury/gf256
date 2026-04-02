@@ -42,7 +42,6 @@ pub fn gf_div(mut dividend: u16, divisor:u16) -> (u8, u16) {
         } else {
             deg_dividend = 15 - dividend.leading_zeros();
         }
-        eprintln!("{}, {}, {}", dividend, quotient, divisor);
     }
 
     (quotient, dividend)
@@ -57,10 +56,48 @@ pub fn gf_inv(a: u16) -> u8 {
         let (quotient, remainder) = gf_div(r as u16, newr as u16);
         (r, newr) = (newr, remainder);
         (t, newt) = (newt, t as u16 ^ gf_mul(quotient as u8, newt as u8) as u16);
-        //eprintln!("{} {} {}", r, newr, quotient);
     }
 
     t as u8
+}
+
+pub fn sbox(a: u8) -> u8 {
+    let c: u8 = 0x63;
+    let mut b_tild: u8 = 0x00;
+    let mut b_tild_shifted:u8 = 0x00;
+
+    if a != 0x00 {
+        b_tild = gf_inv(a as u16)
+    }
+
+    for i in 0..4 {
+        b_tild_shifted ^= b_tild.rotate_right(i + 4)
+    }
+
+    let b_dash = b_tild ^ b_tild_shifted ^ c;
+    b_dash
+}
+
+pub fn sub_bytes(state: &mut [u8; 16]) {
+    for i in 0..state.len() {
+        state[i] = sbox(state[i])
+    }
+}
+
+pub fn shift_rows(state: &mut [u8; 16]) {
+    let map: [usize; 16] = [
+        0, 1, 2, 3,
+        5, 6, 7, 4,
+        10, 11, 8, 9,
+        15, 12, 13, 14
+    ];
+    let mut new_state: [u8; 16] = [0; 16];
+
+    for i in 0..16 {
+        new_state[i] = state[map[i]]
+    }
+    
+    *state = new_state;
 }
 
 #[cfg(test)]
@@ -96,5 +133,45 @@ mod tests {
     fn test_gf_inv() {
         let result = gf_inv(0x53);
         assert_eq!(result, 0xca);
+    }
+
+    #[test]
+    fn test_sbox() {
+        let result = sbox(0x53);
+        assert_eq!(result, 0xed);
+    }
+
+    #[test]
+    fn test_sub_bytes() {
+        let mut state: [u8; 16] = [
+          0x19, 0x3d, 0xe3, 0xbe,
+          0xa0, 0xf4, 0xe2, 0x2b,
+          0x9a, 0xc6, 0x8d, 0x2a,
+          0xe9, 0xf8, 0x48, 0x08,
+        ];
+        sub_bytes(&mut state);
+        assert_eq!(state, [
+          0xd4, 0x27, 0x11, 0xae,
+          0xe0, 0xbf, 0x98, 0xf1,
+          0xb8, 0xb4, 0x5d, 0xe5,
+          0x1e, 0x41, 0x52, 0x30,
+        ]);
+    }
+
+    #[test]
+    fn test_shift_rows() {
+        let mut state: [u8; 16] = [
+          0xd4, 0xe0, 0xb8, 0x1e,
+          0x27, 0xbf, 0xb4, 0x41,
+          0x11, 0x98, 0x5d, 0x52,
+          0xae, 0xf1, 0xe5, 0x30
+         ];
+        shift_rows(&mut state);
+        assert_eq!(state, [
+          0xd4, 0xe0, 0xb8, 0x1e,
+          0xbf, 0xb4, 0x41, 0x27,
+          0x5d, 0x52, 0x11, 0x98,
+          0x30, 0xae, 0xf1, 0xe5,
+        ]);
     }
 }
